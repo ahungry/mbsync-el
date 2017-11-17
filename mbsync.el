@@ -86,8 +86,11 @@ Arguments PROC, STRING as in `set-process-filter'."
     (save-excursion
       ;; message progress
       (goto-char mbsync-process-filter-pos)
-      (while (re-search-forward (rx bol "Channel " (+ (any alnum)) eol) nil t)
-        (mbsync-info "%s" (match-string 0))))
+      ;; Newer versions of mbsync just report C:, B:, M:, or S: for progress.
+      (while (re-search-forward (rx (or "Channel " (and (any ?m ?c ?b ?s) ": "))
+                                    (+ (any alnum ?/)))
+                                nil t)
+        (mbsync-info "mbsync progress: %s" (match-string 0))))
 
     (let (err-pos)
       (save-excursion
