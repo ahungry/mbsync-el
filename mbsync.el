@@ -3,7 +3,7 @@
 ;; Copyright (C) 2012-2017 Dimitri Fontaine
 
 ;; Author: Dimitri Fontaine <dim@tapoueh.org>
-;; Version: 0.0.1
+;; Version: 0.1.1
 ;; URL: https://github.com/dimitri/mbsync-el
 
 ;; This file is NOT part of GNU Emacs.
@@ -13,6 +13,12 @@
 ;;; Commentary:
 ;;
 ;; Run mbsync to fetch mails
+
+;;; News:
+
+;;;; Changes since 0.0.1:
+;; - Use a mutex to ensure only one process runs at a time.
+;;   mbsync doesn't really work well if 2 start to run at once.
 
 ;;; Code:
 
@@ -50,6 +56,7 @@
   :group 'mbsync)
 
 (defvar mbsync-process-filter-pos nil)
+(defvar mbsync--processing-mutex nil)
 
 (defun mbsync-info (&rest args)
   "Show user the message ARGS if we're being `mbsync-verbose'."
@@ -66,21 +73,21 @@ Arguments PROC, STRING as in `set-process-filter'."
 
     (save-excursion
       (let ((inhibit-read-only t))
-	(goto-char (point-max))
-	(insert string)
+        (goto-char (point-max))
+        (insert string)
 
-	;; accept certificates
-	(goto-char mbsync-process-filter-pos)
-	(while (re-search-forward "Accept certificate?" nil t)
+        ;; accept certificates
+        (goto-char mbsync-process-filter-pos)
+        (while (re-search-forward "Accept certificate?" nil t)
           (if mbsync-auto-accept-certs
               (process-send-string proc "y\n")
             (message "mbsync blocked, waiting for certificate acceptance")))))
 
     (save-excursion
-	;; message progress
-	(goto-char mbsync-process-filter-pos)
-	(while (re-search-forward (rx bol "Channel " (+ (any alnum)) eol) nil t)
-	  (mbsync-info "%s" (match-string 0))))
+      ;; message progress
+      (goto-char mbsync-process-filter-pos)
+      (while (re-search-forward (rx bol "Channel " (+ (any alnum)) eol) nil t)
+        (mbsync-info "%s" (match-string 0))))
 
     (let (err-pos)
       (save-excursion
@@ -108,6 +115,7 @@ Arguments PROC, STRING as in `set-process-filter'."
 Arguments PROC, CHANGE as in `set-process-sentinel'."
   (when (eq (process-status proc) 'exit)
     (mbsync-info "mbsync is done")
+    (setq mbsync--processing-mutex nil)
     (run-hooks 'mbsync-exit-hook)))
 
 ;;;###autoload
@@ -115,13 +123,18 @@ Arguments PROC, CHANGE as in `set-process-sentinel'."
   "Run the `mbsync' command, asynchronously, then run `mbsync-exit-hook'.
 If SHOW-BUFFER, also show the *mbsync* output."
   (interactive "p")
-  (let* ((name "*mbsync*")
-	 (dummy (when (get-buffer name) (kill-buffer name)))
-	 (proc (apply 'start-process name name mbsync-executable mbsync-args)))
-    (set-process-filter proc 'mbsync-process-filter)
-    (set-process-sentinel proc 'mbsync-sentinel)
-    (when (and (called-interactively-p 'any) (eq show-buffer 4))
-      (set-window-buffer (selected-window) (process-buffer proc)))))
+  (if mbsync--processing-mutex
+      (message "Please wait, mbsync is already fetching, see *mbsync* for details.")
+    (progn
+      (setq mbsync--processing-mutex t)
+      (let* ((name "*mbsync*")
+             (dummy (when (get-buffer name) (kill-buffer name)))
+             (proc (apply 'start-process name name mbsync-executable mbsync-args)))
+        (message "mbsync is now fetching, see *mbsync* for details.")
+        (set-process-filter proc 'mbsync-process-filter)
+        (set-process-sentinel proc 'mbsync-sentinel)
+        (when (and (called-interactively-p 'any) (eq show-buffer 4))
+          (set-window-buffer (selected-window) (process-buffer proc)))))))
 
 (provide 'mbsync)
 
