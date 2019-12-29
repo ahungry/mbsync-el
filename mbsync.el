@@ -59,7 +59,7 @@
 (defvar mbsync-process-filter-pos nil)
 (defvar mbsync--processing-mutex nil)
 
-(defvar mbsync-buffer-name "*mbsync*")
+(defvar mbsync-buffer-name " *mbsync*")
 
 (defun mbsync-info (&rest args)
   "Show user the message ARGS if we're being `mbsync-verbose'."
@@ -126,7 +126,7 @@ Arguments PROC, CHANGE as in `set-process-sentinel'."
 
 (defun mbsync-get-proc ()
   "Get the running mbsync process (or nil if no such)."
-  (let ((b (get-buffer "*mbsync*")))
+  (let ((b (get-buffer mbsync-buffer-name)))
     (and (buffer-live-p b)
          (get-buffer-process b))))
 
