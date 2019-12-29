@@ -63,7 +63,7 @@
 
 (defun mbsync-info (&rest args)
   "Show user the message ARGS if we're being `mbsync-verbose'."
-  (let ((inhibit-message (not mbsync-verbose)))
+  (when mbsync-verbose
     (apply #'message args)))
 
 (defun mbsync-process-filter (proc string)
